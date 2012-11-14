@@ -21,11 +21,12 @@ import (
 
 // Globals
 var (
-	timeout     = flag.Int("timeout", 5, "Seconds timeout for backend connection")
-	probe_delay = flag.Int("probe-delay", 30, "Seconds to delay probes after backend error")
-	use_syslog  = flag.Bool("syslog", false, "Use Syslog for logging")
-	debug       = flag.Bool("debug", false, "Enable verbose logging")
-	me          = path.Base(os.Args[0])
+	timeout       = flag.Duration("timeout", time.Second*5, "Timeout for backend connection")
+	probe_delay   = flag.Duration("probe-delay", time.Second*30, "Interval to delay probes after backend error")
+	use_syslog    = flag.Bool("syslog", false, "Use Syslog for logging")
+	debug         = flag.Bool("debug", false, "Enable verbose logging")
+	statsInterval = flag.Duration("stats", time.Minute*15, "Interval to log stats")
+	me            = path.Base(os.Args[0])
 )
 
 // Backends stats
@@ -106,22 +107,25 @@ func main() {
 		backends[remoteAddr] = Backend{time.Now(), 0, 0}
 	}
 
+	// Print the stats every statsInterval
+	go func() {
+		ch := time.Tick(*statsInterval)
+		for {
+			<-ch
+			log_stats(backends)
+		}
+	}()
+
 	local, err := net.Listen("tcp", localAddr)
 	if local == nil {
 		log.Fatalf("Failed to open listening socket: %s", err)
 	}
 	log.Printf("Starting, listening on %s", localAddr)
 
-	stats := time.Now()
 	for {
 		conn, err := local.Accept()
 		if err != nil {
 			log.Fatalf("Accept failed: %s", err)
-		}
-
-		if stats.Before(time.Now()) {
-			go log_stats(backends)
-			stats = time.Now().Add(time.Duration(15) * time.Minute)
 		}
 
 		var remote *net.TCPConn
@@ -132,7 +136,7 @@ func main() {
 				continue
 			}
 
-			remote_conn, err := net.DialTimeout("tcp", address, time.Duration(*timeout)*time.Second)
+			remote_conn, err := net.DialTimeout("tcp", address, *timeout)
 			if err == nil {
 				remote = remote_conn.(*net.TCPConn)
 
@@ -149,7 +153,7 @@ func main() {
 			logDebug("DEBUG: err=%q, remote=%q", err, remote_conn)
 
 			// don't check that backend for probe_delay seconds
-			backend.timestamp = time.Now().Add(time.Duration(*probe_delay) * time.Second)
+			backend.timestamp = time.Now().Add(*probe_delay)
 			backend.errors += 1
 			backends[address] = backend
 		}
