@@ -16,7 +16,15 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 )
+
+// Backends stats
+type Backend struct {
+	timestamp time.Time
+	requests  int
+	errors    int
+}
 
 // Copy one side of the socket, doing a half close when it has
 // finished
@@ -31,38 +39,32 @@ func copy_half(dst, src *net.TCPConn, wg *sync.WaitGroup) {
 }
 
 // Forward the incoming TCP connection to one of the remote addresses
-func forward(local *net.TCPConn, remoteAddrs []string, debug bool) {
-	var remote *net.TCPConn
-	for _, remoteAddr := range remoteAddrs {
-		remote_conn, err := net.Dial("tcp", remoteAddr)
-		log.Printf("err=%q, remote=%q", err, remote_conn)
-		if err == nil {
-			remote = remote_conn.(*net.TCPConn)
-			break
-		}
-		log.Printf("Failed to connect to remote %s: %s", remoteAddr, err)
-	}
-	if remote == nil {
-		log.Printf("Failed to connect to any remotes")
-		local.Close()
-		return
-	}
+func forward(local *net.TCPConn, remote *net.TCPConn, debug bool) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	if debug {
-		log.Printf("[%s]: Start transfer %s to %s", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
+		log.Printf("DEBUG: <%s> Start transfer %s to %s", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
 	}
 	go copy_half(local, remote, &wg)
 	go copy_half(remote, local, &wg)
 	wg.Wait()
 	if debug {
-		log.Printf("[%s]: Finished transfer from %s to %s done", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
+		log.Printf("DEBUG: <%s> Finished transfer from %s to %s done", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
+	}
+}
+
+// Dump stats in the log
+func log_stats(backends map[string]Backend) {
+	for address, backend := range backends {
+		log.Printf("STATS: <%s>, requests=%s errors=%s last=%s", address, backend.requests, backend.errors, backend.timestamp)
 	}
 }
 
 // Main script
 func main() {
 	me := path.Base(os.Args[0])
+	timeout := flag.Int("timeout", 5, "Seconds timeout for backend connection")
+	probe_delay := flag.Int("probe-delay", 30, "Seconds to delay probes after backend error")
 	use_syslog := flag.Bool("syslog", false, "Use Syslog for logging")
 	debug := flag.Bool("debug", false, "Enable verbose logging")
 
@@ -86,17 +88,73 @@ func main() {
 	}
 
 	localAddr := flag.Args()[0]
-	remoteAddrs := flag.Args()[1:]
+
+	backends := make(map[string]Backend)
+	for _, remoteAddr := range flag.Args()[1:] {
+		backends[remoteAddr] = Backend{time.Now(), 0, 0}
+	}
+
 	local, err := net.Listen("tcp", localAddr)
 	if local == nil {
 		log.Fatalf("Failed to open listening socket: %s", err)
 	}
 	log.Printf("Starting, listening on %s", localAddr)
+
+	stats := time.Now()
 	for {
 		conn, err := local.Accept()
 		if err != nil {
 			log.Fatalf("Accept failed: %s", err)
 		}
-		go forward(conn.(*net.TCPConn), remoteAddrs, *debug)
+
+		if stats.Before(time.Now()) {
+			go log_stats(backends)
+			stats = time.Now().Add(time.Duration(15) * time.Minute)
+		}
+
+		var remote *net.TCPConn
+		for address, backend := range backends {
+
+			if backend.timestamp.After(time.Now()) {
+				if *debug {
+					log.Printf("DEBUG: <%s> Delayed probe (next: %s)", address, backend.timestamp)
+				}
+				continue
+			}
+
+			remote_conn, err := net.DialTimeout("tcp", address, time.Duration(*timeout)*time.Second)
+			if err == nil {
+				remote = remote_conn.(*net.TCPConn)
+
+				// refresh last time it was used
+				backend.timestamp = time.Now()
+				backend.requests += 1
+				backends[address] = backend
+
+				go forward(conn.(*net.TCPConn), remote, *debug)
+				break
+			}
+
+			log.Printf("Failed to connect to backend %s: %s", address, err)
+			if *debug {
+				log.Printf("DEBUG: err=%q, remote=%q", err, remote_conn)
+			}
+
+			// don't check that backend for probe_delay seconds
+			backend.timestamp = time.Now().Add(time.Duration(*probe_delay) * time.Second)
+			backend.errors += 1
+			backends[address] = backend
+		}
+
+		if remote == nil {
+			log.Printf("Failed to connect to any backend")
+			conn.(*net.TCPConn).Close()
+
+			// next try probe all backends
+			for address, backend := range backends {
+				backend.timestamp = time.Now()
+				backends[address] = backend
+			}
+		}
 	}
 }
