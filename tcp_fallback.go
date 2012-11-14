@@ -3,7 +3,6 @@
 // Connect to the addresses in order - if one works use it
 //
 // On any sort of error then close the connection so the client can retry
-
 package main
 
 import (
@@ -31,13 +30,14 @@ var (
 
 // Backends stats
 type Backend struct {
+	address   string
 	timestamp time.Time
 	requests  int
 	errors    int
 }
 
 // A list of backends
-type Backends map[string]Backend
+type Backends []*Backend
 
 // Log the contents if debug
 func logDebug(text string, params ...interface{}) {
@@ -62,9 +62,9 @@ func copy_half(dst, src *net.TCPConn, wg *sync.WaitGroup) {
 // NewBackends creates a Backends structure from the remote
 // addresses passed in
 func NewBackends(remoteAddrs []string) Backends {
-	backends := Backends{}
-	for _, remoteAddr := range remoteAddrs {
-		backends[remoteAddr] = Backend{time.Now(), 0, 0}
+	backends := make(Backends, len(remoteAddrs))
+	for i, remoteAddr := range remoteAddrs {
+		backends[i] = &Backend{address: remoteAddr, timestamp: time.Now()}
 	}
 	return backends
 }
@@ -83,37 +83,33 @@ func forward(local *net.TCPConn, remote *net.TCPConn) {
 // connect attempts to connect to a backend
 func (backends Backends) connect() *net.TCPConn {
 	var remote *net.TCPConn
-	for address, backend := range backends {
-
+	for _, backend := range backends {
 		if backend.timestamp.After(time.Now()) {
-			logDebug("DEBUG: <%s> Delayed probe (next: %s)", address, backend.timestamp)
+			logDebug("DEBUG: <%s> Delayed probe (next: %s)", backend.address, backend.timestamp)
 			continue
 		}
 
-		remote_conn, err := net.DialTimeout("tcp", address, *timeout)
+		remote_conn, err := net.DialTimeout("tcp", backend.address, *timeout)
 		if err == nil {
 			remote = remote_conn.(*net.TCPConn)
 
 			// refresh last time it was used
 			backend.timestamp = time.Now()
 			backend.requests += 1
-			backends[address] = backend
 			break
 		}
 
-		log.Printf("Failed to connect to backend %s: %s", address, err)
+		log.Printf("Failed to connect to backend %s: %s", backend.address, err)
 		logDebug("DEBUG: err=%q, remote=%q", err, remote_conn)
 
 		// don't check that backend for probe_delay seconds
 		backend.timestamp = time.Now().Add(*probe_delay)
 		backend.errors += 1
-		backends[address] = backend
 	}
 	if remote == nil {
-		// next try probe all backends
-		for address, backend := range backends {
+		// next probe try all backends
+		for _, backend := range backends {
 			backend.timestamp = time.Now()
-			backends[address] = backend
 		}
 	}
 	return remote
@@ -181,7 +177,7 @@ func main() {
 			go forward(conn.(*net.TCPConn), remote)
 		} else {
 			log.Printf("Failed to connect to any backend")
-			local.Close()
+			conn.Close()
 		}
 	}
 }
