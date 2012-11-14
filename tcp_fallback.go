@@ -19,11 +19,28 @@ import (
 	"time"
 )
 
+// Globals
+var (
+	timeout     = flag.Int("timeout", 5, "Seconds timeout for backend connection")
+	probe_delay = flag.Int("probe-delay", 30, "Seconds to delay probes after backend error")
+	use_syslog  = flag.Bool("syslog", false, "Use Syslog for logging")
+	debug       = flag.Bool("debug", false, "Enable verbose logging")
+	me          = path.Base(os.Args[0])
+)
+
 // Backends stats
 type Backend struct {
 	timestamp time.Time
 	requests  int
 	errors    int
+}
+
+// Log the contents if debug
+func logDebug(text string, params ...interface{}) {
+	if !*debug {
+		return
+	}
+	log.Printf(text, params...)
 }
 
 // Copy one side of the socket, doing a half close when it has
@@ -39,18 +56,14 @@ func copy_half(dst, src *net.TCPConn, wg *sync.WaitGroup) {
 }
 
 // Forward the incoming TCP connection to one of the remote addresses
-func forward(local *net.TCPConn, remote *net.TCPConn, debug bool) {
+func forward(local *net.TCPConn, remote *net.TCPConn) {
 	var wg sync.WaitGroup
 	wg.Add(2)
-	if debug {
-		log.Printf("DEBUG: <%s> Start transfer %s to %s", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
-	}
+	logDebug("DEBUG: <%s> Start transfer %s to %s", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
 	go copy_half(local, remote, &wg)
 	go copy_half(remote, local, &wg)
 	wg.Wait()
-	if debug {
-		log.Printf("DEBUG: <%s> Finished transfer from %s to %s done", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
-	}
+	logDebug("DEBUG: <%s> Finished transfer from %s to %s done", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
 }
 
 // Dump stats in the log
@@ -60,20 +73,19 @@ func log_stats(backends map[string]Backend) {
 	}
 }
 
+// usage prints a help message
+func usage() {
+	fmt.Fprintf(os.Stderr,
+		"Usage: %s [flags] <local-address:port> [<remote-address:port>]+\n\n"+
+			"flags:\n\n",
+		me)
+	flag.PrintDefaults()
+	fmt.Fprintf(os.Stderr, "\n")
+}
+
 // Main script
 func main() {
-	me := path.Base(os.Args[0])
-	timeout := flag.Int("timeout", 5, "Seconds timeout for backend connection")
-	probe_delay := flag.Int("probe-delay", 30, "Seconds to delay probes after backend error")
-	use_syslog := flag.Bool("syslog", false, "Use Syslog for logging")
-	debug := flag.Bool("debug", false, "Enable verbose logging")
-
-	flag.Usage = func() {
-		fmt.Printf("Usage: %s [flags] <local-address:port> [<remote-address:port>]+\n\n", me)
-		fmt.Printf("flags:\n\n")
-		flag.PrintDefaults()
-		fmt.Printf("\n")
-	}
+	flag.Usage = usage
 	flag.Parse()
 
 	if flag.NArg() < 2 {
@@ -116,9 +128,7 @@ func main() {
 		for address, backend := range backends {
 
 			if backend.timestamp.After(time.Now()) {
-				if *debug {
-					log.Printf("DEBUG: <%s> Delayed probe (next: %s)", address, backend.timestamp)
-				}
+				logDebug("DEBUG: <%s> Delayed probe (next: %s)", address, backend.timestamp)
 				continue
 			}
 
@@ -131,14 +141,12 @@ func main() {
 				backend.requests += 1
 				backends[address] = backend
 
-				go forward(conn.(*net.TCPConn), remote, *debug)
+				go forward(conn.(*net.TCPConn), remote)
 				break
 			}
 
 			log.Printf("Failed to connect to backend %s: %s", address, err)
-			if *debug {
-				log.Printf("DEBUG: err=%q, remote=%q", err, remote_conn)
-			}
+			logDebug("DEBUG: err=%q, remote=%q", err, remote_conn)
 
 			// don't check that backend for probe_delay seconds
 			backend.timestamp = time.Now().Add(time.Duration(*probe_delay) * time.Second)
