@@ -33,16 +33,16 @@ func copy_half(dst, src *net.TCPConn, wg *sync.WaitGroup) {
 // Forward the incoming TCP connection to one of the remote addresses
 func forward(local *net.TCPConn, remoteAddrs []string, debug bool) {
 	var remote *net.TCPConn
-	var err error
 	for _, remoteAddr := range remoteAddrs {
 		remote_conn, err := net.Dial("tcp", remoteAddr)
+		log.Printf("err=%q, remote=%q", err, remote_conn)
 		if err == nil {
 			remote = remote_conn.(*net.TCPConn)
 			break
 		}
 		log.Printf("Failed to connect to remote %s: %s", remoteAddr, err)
 	}
-	if err != nil {
+	if remote == nil {
 		log.Printf("Failed to connect to any remotes")
 		local.Close()
 		return
