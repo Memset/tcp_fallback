@@ -7,10 +7,14 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"io"
 	"log"
+	"log/syslog"
 	"net"
 	"os"
+	"path"
 	"sync"
 )
 
@@ -27,7 +31,7 @@ func copy_half(dst, src *net.TCPConn, wg *sync.WaitGroup) {
 }
 
 // Forward the incoming TCP connection to one of the remote addresses
-func forward(local *net.TCPConn, remoteAddrs []string) {
+func forward(local *net.TCPConn, remoteAddrs []string, debug bool) {
 	var remote *net.TCPConn
 	var err error
 	for _, remoteAddr := range remoteAddrs {
@@ -45,20 +49,44 @@ func forward(local *net.TCPConn, remoteAddrs []string) {
 	}
 	var wg sync.WaitGroup
 	wg.Add(2)
-	log.Printf("Start transfer %s to %s", local.LocalAddr(), remote.LocalAddr())
+	if debug {
+		log.Printf("[%s]: Start transfer %s to %s", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
+	}
 	go copy_half(local, remote, &wg)
 	go copy_half(remote, local, &wg)
 	wg.Wait()
-	log.Printf("Finished transfer from %s to %s done", local.LocalAddr(), remote.LocalAddr())
+	if debug {
+		log.Printf("[%s]: Finished transfer from %s to %s done", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
+	}
 }
 
 // Main script
 func main() {
-	if len(os.Args) < 3 {
-		log.Fatalf("Syntax: %s <local-address> [<remote-address>]+", os.Args[0])
+	me := path.Base(os.Args[0])
+	use_syslog := flag.Bool("syslog", false, "Use Syslog for logging")
+	debug := flag.Bool("debug", false, "Enable verbose logging")
+
+	flag.Usage = func() {
+		fmt.Printf("Usage: %s [flags] <local-address:port> [<remote-address:port>]+\n\n", me)
+		fmt.Printf("flags:\n\n")
+		flag.PrintDefaults()
+		fmt.Printf("\n")
 	}
-	localAddr := os.Args[1]
-	remoteAddrs := os.Args[2:]
+	flag.Parse()
+
+	if flag.NArg() < 2 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if *use_syslog {
+		w, _ := syslog.New(syslog.LOG_INFO, me)
+		log.SetFlags(0)
+		log.SetOutput(w)
+	}
+
+	localAddr := flag.Args()[0]
+	remoteAddrs := flag.Args()[1:]
 	local, err := net.Listen("tcp", localAddr)
 	if local == nil {
 		log.Fatalf("Failed to open listening socket: %s", err)
@@ -69,6 +97,6 @@ func main() {
 		if err != nil {
 			log.Fatalf("Accept failed: %s", err)
 		}
-		go forward(conn.(*net.TCPConn), remoteAddrs)
+		go forward(conn.(*net.TCPConn), remoteAddrs, *debug)
 	}
 }
