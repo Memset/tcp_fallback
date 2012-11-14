@@ -59,6 +59,16 @@ func copy_half(dst, src *net.TCPConn, wg *sync.WaitGroup) {
 	src.CloseRead()
 }
 
+// NewBackends creates a Backends structure from the remote
+// addresses passed in
+func NewBackends(remoteAddrs []string) Backends {
+	backends := Backends{}
+	for _, remoteAddr := range remoteAddrs {
+		backends[remoteAddr] = Backend{time.Now(), 0, 0}
+	}
+	return backends
+}
+
 // Forward the incoming TCP connection to one of the remote addresses
 func forward(local *net.TCPConn, remote *net.TCPConn) {
 	var wg sync.WaitGroup
@@ -143,11 +153,7 @@ func main() {
 	}
 
 	localAddr := flag.Args()[0]
-
-	backends := Backends{}
-	for _, remoteAddr := range flag.Args()[1:] {
-		backends[remoteAddr] = Backend{time.Now(), 0, 0}
-	}
+	backends := NewBackends(flag.Args()[1:])
 
 	// Print the stats every statsInterval
 	go func() {
@@ -158,23 +164,24 @@ func main() {
 		}
 	}()
 
+	// Open the main listening socket
 	local, err := net.Listen("tcp", localAddr)
 	if local == nil {
 		log.Fatalf("Failed to open listening socket: %s", err)
 	}
-	log.Printf("Starting, listening on %s", localAddr)
 
+	// Main loop accepting connections
+	log.Printf("Starting, listening on %s", localAddr)
 	for {
 		conn, err := local.Accept()
 		if err != nil {
 			log.Fatalf("Accept failed: %s", err)
 		}
-		remote := backends.connect()
-		if remote == nil {
+		if remote := backends.connect(); remote != nil {
+			go forward(conn.(*net.TCPConn), remote)
+		} else {
 			log.Printf("Failed to connect to any backend")
 			local.Close()
-		} else {
-			go forward(conn.(*net.TCPConn), remote)
 		}
 	}
 }
