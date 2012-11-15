@@ -8,7 +8,8 @@ connection fails, the client connection is closed and the backend is marked as n
 to be probed in the background. Once the backend connectivity is restored, the backend is marked
 back to be used by the proxy.
 
-Because the proxy works at TCP level, it can be used with any TCP based service.
+Because the proxy works at TCP level, it can be used with any TCP based service using one
+single port.
 
 Build
 -----
@@ -19,8 +20,8 @@ Fetch and build with:
 
   go get github.com/memset/tcp_fallback
 
-and this will build the binary in `$GOPATH/bin`.  You can then modify
-the source and submit patches.
+and this will build the binary in `$GOPATH/bin`. You can then modify the source and
+submit patches.
 
 Or checkout the source in the traditional way, change to the directory
 and type:
