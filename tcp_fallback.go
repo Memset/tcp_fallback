@@ -80,9 +80,20 @@ func copy_half(dst, src *net.TCPConn, wg *sync.WaitGroup) {
 // NewBackends creates a Backends structure from the remote
 // addresses passed in
 func NewBackends(remoteAddrs []string) Backends {
+	log.Printf("Initializing %d backend~s", len(remoteAddrs))
+
 	backends := make(Backends, len(remoteAddrs))
 	for i, remoteAddr := range remoteAddrs {
 		backends[i] = &Backend{address: remoteAddr, timestamp: time.Now()}
+
+		// poll backend first time
+		remote_conn, err := net.DialTimeout("tcp", remoteAddr, *timeout)
+		if err != nil {
+			log.Printf("Backend %s added, ERROR: %v", remoteAddr, err)
+		} else {
+			log.Printf("Backend %s added, OK", remoteAddr)
+			remote_conn.Close()
+		}
 	}
 	return backends
 }
@@ -143,8 +154,8 @@ func (backends Backends) log_stats() {
 // usage prints a help message
 func usage() {
 	fmt.Fprintf(os.Stderr,
-	    "%s ver %s\n\n"+
-		"Usage: %s [flags] <local-address:port> [<remote-address:port>]+\n\n"+
+		"%s ver %s\n\n"+
+			"Usage: %s [flags] <local-address:port> [<remote-address:port>]+\n\n"+
 			"flags:\n\n",
 		me, version, me)
 	flag.PrintDefaults()
@@ -167,6 +178,8 @@ func main() {
 		log.SetOutput(w)
 	}
 
+	log.Printf("Starting %s ver %s", me, version)
+
 	localAddr := flag.Args()[0]
 	backends := NewBackends(flag.Args()[1:])
 
@@ -186,7 +199,7 @@ func main() {
 	}
 
 	// Main loop accepting connections
-	log.Printf("Starting, listening on %s", localAddr)
+	log.Printf("Listening on %s", localAddr)
 	for {
 		conn, err := local.Accept()
 		if err != nil {
