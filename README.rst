@@ -5,19 +5,27 @@ This is a TCP proxy implementing a simple fallback mechanism.
 
 All the requests will be forwarded to the first working backend on a list. When a backend
 connection fails, the client connection is closed and the backend is marked as non-working
-to be probed in background. Once the backend connectivity is restored, the backend is marked
+to be probed in the background. Once the backend connectivity is restored, the backend is marked
 back to be used by the proxy.
 
-Because the proxy works at TPC level, it can be used with any TCP based service.
+Because the proxy works at TCP level, it can be used with any TCP based service.
 
 Build
 -----
 
 Go 1.0 or later is required: http://golang.org/
 
-The proxy can be built with:
+Fetch and build with:
 
- go build tcp_fallback.go
+  go get github.com/memset/tcp_fallback
+
+and this will build the binary in `$GOPATH/bin`.  You can then modify
+the source and submit patches.
+
+Or checkout the source in the traditional way, change to the directory
+and type:
+
+ go build
 
 Usage
 -----
