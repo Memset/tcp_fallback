@@ -42,6 +42,7 @@ var (
 	debug         = flag.Bool("debug", false, "Enable verbose logging")
 	statsInterval = flag.Duration("stats", time.Minute*15, "Interval to log stats")
 	me            = path.Base(os.Args[0])
+	version       = "0.1"
 )
 
 // Backends stats
@@ -142,9 +143,10 @@ func (backends Backends) log_stats() {
 // usage prints a help message
 func usage() {
 	fmt.Fprintf(os.Stderr,
+	    "%s ver %s\n\n"+
 		"Usage: %s [flags] <local-address:port> [<remote-address:port>]+\n\n"+
 			"flags:\n\n",
-		me)
+		me, version, me)
 	flag.PrintDefaults()
 	fmt.Fprintf(os.Stderr, "\n")
 }
