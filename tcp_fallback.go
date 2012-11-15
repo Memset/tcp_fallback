@@ -47,13 +47,14 @@ var (
 
 // Backends stats
 type Backend struct {
-	address    string
-	timestamp  time.Time
-	failedTime time.Time
-	downtime   time.Duration
-	requests   int
-	errors     int
-	failed     bool
+	address     string
+	timestamp   time.Time
+	failedTime  time.Time
+	downtime    time.Duration
+	requests    int64
+	errors      int64
+	transferred int64
+	failed      bool
 }
 
 // A list of backends
@@ -70,9 +71,10 @@ func logDebug(text string, params ...interface{}) {
 
 // Copy one side of the socket, doing a half close when it has
 // finished
-func copy_half(dst, src *net.TCPConn, wg *sync.WaitGroup) {
+func copy_half(backend *Backend, dst, src *net.TCPConn, wg *sync.WaitGroup) {
 	defer wg.Done()
-	_, err := io.Copy(dst, src)
+	transferred, err := io.Copy(dst, src)
+	backend.transferred += transferred
 	if err != nil {
 		log.Printf("Error: %s", err)
 	}
@@ -94,20 +96,21 @@ func NewBackends(remoteAddrs []string) Backends {
 }
 
 // Forward the incoming TCP connection to one of the remote addresses
-func forward(local *net.TCPConn, remote *net.TCPConn) {
+func forward(backend *Backend, local *net.TCPConn, remote *net.TCPConn) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	logDebug("<%s> Start transfer %s to %s", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
-	go copy_half(local, remote, &wg)
-	go copy_half(remote, local, &wg)
+	go copy_half(backend, local, remote, &wg)
+	go copy_half(backend, remote, local, &wg)
 	wg.Wait()
 	logDebug("<%s> Finished transfer from %s to %s done", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
 }
 
 // connect attempts to connect to a backend
-func (backends Backends) connect() *net.TCPConn {
+func (backends Backends) connect() (*net.TCPConn, *Backend) {
 	var remote *net.TCPConn
-	for _, backend := range backends {
+	var backend *Backend
+	for _, backend = range backends {
 		if backend.failed {
 			logDebug("<%s> skipping backend in failed state", backend.address)
 			continue
@@ -130,13 +133,15 @@ func (backends Backends) connect() *net.TCPConn {
 		backend.failedTime = time.Now()
 		backend.errors += 1
 	}
-	return remote
+	return remote, backend
 }
 
 // logs_stats dump backends stats in the log
 func (backends Backends) log_stats() {
 	for _, backend := range backends {
-		log.Printf("STATS: <%s> failed=%v (downtime=%v) requests=%d errors=%d last=%s", backend.address, backend.downtime, backend.failed, backend.requests, backend.errors, backend.timestamp)
+		log.Printf("STATS: <%s> failed=%v (downtime=%v) requests=%d bytes=%d errors=%d last=%s",
+			backend.address, backend.failed, backend.downtime, backend.requests,
+			backend.transferred, backend.errors, backend.timestamp)
 	}
 }
 
@@ -250,8 +255,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("Accept failed: %s", err)
 		}
-		if remote := backends.connect(); remote != nil {
-			go forward(conn.(*net.TCPConn), remote)
+		if remote, backend := backends.connect(); remote != nil {
+			go forward(backend, conn.(*net.TCPConn), remote)
 		} else {
 			log.Printf("Failed to connect to any backend")
 			conn.Close()
