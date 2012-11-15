@@ -22,7 +22,7 @@ import (
 var (
 	timeout       = flag.Duration("timeout", time.Second*5, "Timeout for backend connection")
 	probe_delay   = flag.Duration("probe-delay", time.Second*30, "Interval to delay probes after backend error")
-	use_syslog    = flag.Bool("syslog", false, "Use Syslog for logging")
+	useSyslog     = flag.Bool("syslog", false, "Use Syslog for logging")
 	debug         = flag.Bool("debug", false, "Enable verbose logging")
 	statsInterval = flag.Duration("stats", time.Minute*15, "Interval to log stats")
 	me            = path.Base(os.Args[0])
@@ -142,7 +142,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *use_syslog {
+	if *useSyslog {
 		w, _ := syslog.New(syslog.LOG_INFO, me)
 		log.SetFlags(0)
 		log.SetOutput(w)
