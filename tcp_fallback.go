@@ -29,8 +29,12 @@ import (
 	"log/syslog"
 	"net"
 	"os"
+	"os/signal"
 	"path"
+	"runtime"
+	"runtime/pprof"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -41,6 +45,8 @@ var (
 	useSyslog     = flag.Bool("syslog", false, "Use Syslog for logging")
 	debug         = flag.Bool("debug", false, "Enable verbose logging")
 	statsInterval = flag.Duration("stats", time.Minute*15, "Interval to log stats")
+	maxthreads    = flag.Int("maxthreads", 4, "Maximum number of OS threads to use")
+	cpuprofile    = flag.String("cpuprofile", "", "Write cpu profile to file if set")
 	me            = path.Base(os.Args[0])
 	version       = "0.1"
 )
@@ -208,11 +214,35 @@ func usage() {
 func main() {
 	flag.Usage = usage
 	flag.Parse()
+	runtime.GOMAXPROCS(*maxthreads)
 
 	if flag.NArg() < 2 {
 		flag.Usage()
 		os.Exit(1)
 	}
+
+	// Setup profiling if desired
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+	}
+
+	// Exit neatly on keyboard interrrupt so everything gets
+	// tidied up properly
+	go func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGINT)
+		<-ch
+		log.Println("Interrupt received")
+		if *cpuprofile != "" {
+			log.Println("Saving CPU profile")
+			pprof.StopCPUProfile()
+		}
+		os.Exit(0)
+	}()
 
 	if *useSyslog {
 		w, _ := syslog.New(syslog.LOG_INFO, me)
