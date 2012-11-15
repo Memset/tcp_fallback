@@ -139,8 +139,12 @@ func (backends Backends) connect() (*net.TCPConn, *Backend) {
 // logs_stats dump backends stats in the log
 func (backends Backends) log_stats() {
 	for _, backend := range backends {
+		downtime := backend.downtime
+		if backend.failed {
+			downtime += time.Now().Sub(backend.failedTime)
+		}
 		log.Printf("STATS: <%s> failed=%v (downtime=%v) requests=%d bytes=%d errors=%d last=%s",
-			backend.address, backend.failed, backend.downtime, backend.requests,
+			backend.address, backend.failed, downtime, backend.requests,
 			backend.transferred, backend.errors, backend.timestamp)
 	}
 }
