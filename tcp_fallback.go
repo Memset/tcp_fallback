@@ -44,7 +44,8 @@ func logDebug(text string, params ...interface{}) {
 	if !*debug {
 		return
 	}
-	log.Printf(text, params...)
+	line := fmt.Sprintf(text, params...)
+	log.Printf("DEBUG: %s", line)
 }
 
 // Copy one side of the socket, doing a half close when it has
@@ -73,11 +74,11 @@ func NewBackends(remoteAddrs []string) Backends {
 func forward(local *net.TCPConn, remote *net.TCPConn) {
 	var wg sync.WaitGroup
 	wg.Add(2)
-	logDebug("DEBUG: <%s> Start transfer %s to %s", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
+	logDebug("<%s> Start transfer %s to %s", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
 	go copy_half(local, remote, &wg)
 	go copy_half(remote, local, &wg)
 	wg.Wait()
-	logDebug("DEBUG: <%s> Finished transfer from %s to %s done", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
+	logDebug("<%s> Finished transfer from %s to %s done", remote.RemoteAddr(), local.LocalAddr(), remote.LocalAddr())
 }
 
 // connect attempts to connect to a backend
@@ -85,7 +86,7 @@ func (backends Backends) connect() *net.TCPConn {
 	var remote *net.TCPConn
 	for _, backend := range backends {
 		if backend.timestamp.After(time.Now()) {
-			logDebug("DEBUG: <%s> Delayed probe (next: %s)", backend.address, backend.timestamp)
+			logDebug("<%s> Delayed probe (next: %s)", backend.address, backend.timestamp)
 			continue
 		}
 
@@ -100,7 +101,7 @@ func (backends Backends) connect() *net.TCPConn {
 		}
 
 		log.Printf("Failed to connect to backend %s: %s", backend.address, err)
-		logDebug("DEBUG: err=%q, remote=%q", err, remote_conn)
+		logDebug("err=%q, remote=%q", err, remote_conn)
 
 		// don't check that backend for probe_delay seconds
 		backend.timestamp = time.Now().Add(*probe_delay)
@@ -118,7 +119,7 @@ func (backends Backends) connect() *net.TCPConn {
 // logs_stats dump backends stats in the log
 func (backends Backends) log_stats() {
 	for _, backend := range backends {
-		log.Printf("STATS: <%s>, requests=%d errors=%d last=%s", backend.address, backend.requests, backend.errors, backend.timestamp)
+		log.Printf("STATS: <%s> requests=%d errors=%d last=%s", backend.address, backend.requests, backend.errors, backend.timestamp)
 	}
 }
 
