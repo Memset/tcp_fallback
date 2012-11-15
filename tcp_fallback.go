@@ -287,7 +287,8 @@ func main() {
 	for {
 		conn, err := local.Accept()
 		if err != nil {
-			log.Fatalf("Accept failed: %s", err)
+			log.Printf("Accept failed: %s", err)
+			continue
 		}
 		if remote, backend := backends.connect(); remote != nil {
 			go forward(backend, conn.(*net.TCPConn), remote)
