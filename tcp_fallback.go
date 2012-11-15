@@ -117,8 +117,8 @@ func (backends Backends) connect() *net.TCPConn {
 
 // logs_stats dump backends stats in the log
 func (backends Backends) log_stats() {
-	for address, backend := range backends {
-		log.Printf("STATS: <%s>, requests=%s errors=%s last=%s", address, backend.requests, backend.errors, backend.timestamp)
+	for _, backend := range backends {
+		log.Printf("STATS: <%s>, requests=%d errors=%d last=%s", backend.address, backend.requests, backend.errors, backend.timestamp)
 	}
 }
 
