@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
@@ -147,10 +146,9 @@ func TestServer1(t *testing.T) {
 // Start the main process
 func TestStartMain(t *testing.T) {
 	es1 := NewEchoServer(server1)
-	os.Args = []string{os.Args[0], "-probe-delay=100ms", proxy, server1, server2, server3}
+	os.Args = []string{os.Args[0], "-quiet", "-probe-delay=100ms", proxy, server1, server2, server3}
 	go main()
 	time.Sleep(1 * time.Second)
-	log.SetOutput(ioutil.Discard)
 	testServer(t, proxy, server1)
 	es1.stop()
 

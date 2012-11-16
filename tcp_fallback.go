@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"log/syslog"
 	"net"
@@ -44,6 +45,7 @@ var (
 	probeDelay    = flag.Duration("probe-delay", time.Second*30, "Interval to delay probes after backend error")
 	useSyslog     = flag.Bool("syslog", false, "Use Syslog for logging")
 	debug         = flag.Bool("debug", false, "Enable verbose logging")
+	quiet         = flag.Bool("quiet", false, "Doesn't log anything")
 	statsInterval = flag.Duration("stats", time.Minute*15, "Interval to log stats")
 	maxthreads    = flag.Int("maxthreads", 4, "Maximum number of OS threads to use")
 	cpuprofile    = flag.String("cpuprofile", "", "Write cpu profile to file if set")
@@ -248,6 +250,9 @@ func main() {
 		w, _ := syslog.New(syslog.LOG_INFO, me)
 		log.SetFlags(0)
 		log.SetOutput(w)
+	}
+	if *quiet {
+		log.SetOutput(ioutil.Discard)
 	}
 
 	log.Printf("Starting %s ver %s", me, version)
