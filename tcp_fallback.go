@@ -278,7 +278,7 @@ func main() {
 
 	// Open the main listening socket
 	local, err := net.Listen("tcp", localAddr)
-	if local == nil {
+	if err != nil {
 		log.Fatalf("Failed to open listening socket: %s", err)
 	}
 
