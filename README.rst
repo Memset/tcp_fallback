@@ -26,7 +26,11 @@ submit patches.
 Or checkout the source in the traditional way, change to the directory
 and type:
 
- go build
+  go build
+
+Test the build with:
+
+  go test
 
 Usage
 -----
