@@ -43,10 +43,10 @@ flags:
   -debug=false: Enable verbose logging
   -maxthreads=4: Maximum number of OS threads to use
   -probe-delay=30s: Interval to delay probes after backend error
+  -quiet=false: Doesn't log anything
   -stats=15m0s: Interval to log stats
   -syslog=false: Use Syslog for logging
   -timeout=5s: Timeout for backend connection
-
 
 Example:
 
