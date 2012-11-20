@@ -273,9 +273,10 @@ func main() {
 				// First time log initialisation
 				if initLog != nil {
 					initLog <- true
+				} else {
+					log.Println("SIGHUP received, re-opening logfile")
 				}
 
-				log.Println("SIGHUP received, re-opening logfile")
 				<-ch
 			}
 		}()
