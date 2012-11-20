@@ -41,6 +41,7 @@ flags:
 
   -cpuprofile="": Write cpu profile to file if set
   -debug=false: Enable verbose logging
+  -logfile="": Log into provided file
   -maxthreads=4: Maximum number of OS threads to use
   -probe-delay=30s: Interval to delay probes after backend error
   -quiet=false: Doesn't log anything

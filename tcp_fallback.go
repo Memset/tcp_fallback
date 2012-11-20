@@ -44,6 +44,7 @@ var (
 	timeout       = flag.Duration("timeout", time.Second*5, "Timeout for backend connection")
 	probeDelay    = flag.Duration("probe-delay", time.Second*30, "Interval to delay probes after backend error")
 	useSyslog     = flag.Bool("syslog", false, "Use Syslog for logging")
+	logFile       = flag.String("logfile", "", "Log into provided file")
 	debug         = flag.Bool("debug", false, "Enable verbose logging")
 	quiet         = flag.Bool("quiet", false, "Doesn't log anything")
 	statsInterval = flag.Duration("stats", time.Minute*15, "Interval to log stats")
@@ -246,13 +247,40 @@ func main() {
 		os.Exit(0)
 	}()
 
-	if *useSyslog {
+	if *quiet {
+		log.SetOutput(ioutil.Discard)
+	} else if *useSyslog {
 		w, _ := syslog.New(syslog.LOG_INFO, me)
 		log.SetFlags(0)
 		log.SetOutput(w)
-	}
-	if *quiet {
-		log.SetOutput(ioutil.Discard)
+	} else if *logFile != "" {
+		// Reopen the logfile on SIGHUP
+		initLog := make(chan bool, 1)
+		go func() {
+			ch := make(chan os.Signal, 1)
+			signal.Notify(ch, syscall.SIGHUP)
+			for {
+				f, err := os.OpenFile(*logFile, os.O_WRONLY|os.O_CREATE, 0640)
+				if err != nil {
+					log.Fatal(err)
+				}
+				f.Seek(0, os.SEEK_END)
+				log.SetOutput(f)
+
+				// First time log initialisation
+				if initLog != nil {
+					initLog <- true
+				}
+
+				log.Println("SIGHUP received, re-opening logfile")
+				<-ch
+			}
+		}()
+		// Wait the logfile
+		<-initLog
+		// We're not using this anymore
+		close(initLog)
+		initLog = nil
 	}
 
 	log.Printf("Starting %s ver %s", me, version)
