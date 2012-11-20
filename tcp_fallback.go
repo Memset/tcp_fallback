@@ -52,6 +52,8 @@ var (
 	cpuprofile    = flag.String("cpuprofile", "", "Write cpu profile to file if set")
 	me            = path.Base(os.Args[0])
 	version       = "0.1"
+	// Used by tests
+	backends Backends
 )
 
 // Backends stats
@@ -286,7 +288,7 @@ func main() {
 	log.Printf("Starting %s ver %s", me, version)
 
 	localAddr := flag.Args()[0]
-	backends := NewBackends(flag.Args()[1:])
+	backends = NewBackends(flag.Args()[1:])
 
 	// Probe backends first time
 	backends.probeAll()
