@@ -37,7 +37,7 @@ Usage
 
   tcp_fallback [flags] <local-address:port> [<remote-address:port>]+
 
-flags:
+flags::
 
   -cpuprofile="": Write cpu profile to file if set
   -debug=false: Enable verbose logging
@@ -76,6 +76,6 @@ There you can file bug reports, ask for help or contribute patches.
 Authors
 -------
 
- - Nick Craig-Wood <nick@memset.com>
- - Juan J. Martinez <juan@memset.com>
+- Nick Craig-Wood <nick@memset.com>
+- Juan J. Martinez <juan@memset.com>
 
