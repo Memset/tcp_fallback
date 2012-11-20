@@ -235,7 +235,7 @@ func main() {
 		pprof.StartCPUProfile(f)
 	}
 
-	// Exit neatly on keyboard interrrupt so everything gets
+	// Exit neatly on keyboard interrupt so everything gets
 	// tidied up properly
 	go func() {
 		ch := make(chan os.Signal, 1)
