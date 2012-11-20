@@ -235,17 +235,18 @@ func main() {
 		pprof.StartCPUProfile(f)
 	}
 
-	// Exit neatly on keyboard interrupt so everything gets
+	// Exit neatly on SIGINT or SIGTERM so everything gets
 	// tidied up properly
 	go func() {
 		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, syscall.SIGINT)
-		<-ch
-		log.Println("Interrupt received")
+		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-ch
+		log.Printf("Signal received: %s", sig)
 		if *cpuprofile != "" {
 			log.Println("Saving CPU profile")
 			pprof.StopCPUProfile()
 		}
+		log.Println("Exiting...")
 		os.Exit(0)
 	}()
 
