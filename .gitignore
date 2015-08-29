@@ -1,2 +1,4 @@
 *~
 tcp_fallback
+tcp_fallback-darwin-amd64
+tcp_fallback-linux-amd64
